@@ -2,8 +2,9 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from datetime import datetime
-from .data_loader import NuclearDataManager
+from datetime import datetime, timedelta
+import pytz
+from .data_loader import NuclearDataManager, GridDataLoader
 from .visualizer import NuclearVisualizer
 from .analyzer import NuclearAnalyzer
 from .utils.logger import setup_logger
@@ -17,6 +18,7 @@ class NuclearTestApp:
         self.nuclear_manager = NuclearDataManager()
         self.nuclear_visualizer = NuclearVisualizer()
         self.nuclear_analyzer = NuclearAnalyzer()
+        self.grid_loader = GridDataLoader()
         
         # Ensure output directory exists
         self.output_dir = Path('output')
@@ -32,17 +34,18 @@ class NuclearTestApp:
         try:
             logger.info("Starting Nuclear data test")
             
+            # Get load data for the last 24 hours
+            logger.info("Fetching load data")
+            load_df = self.grid_loader.get_load_data()
+            if load_df.empty:
+                raise ValueError("No load data available")
+            
             # Update nuclear data
             logger.info("Fetching and processing nuclear data")
             self.nuclear_manager.update_data()
             
-            # Get estimated generation
-            generation_df = self.nuclear_manager.estimate_generation()
-            if generation_df.empty:
-                raise ValueError("No nuclear generation data available")
-            
             # Calculate nuclear statistics
-            nuclear_stats = self.nuclear_analyzer.calculate_stats(generation_df)
+            nuclear_stats = self.nuclear_analyzer.calculate_stats(load_df)
             
             # Generate test chart
             chart_path = self.generate_chart_filename()
@@ -55,10 +58,10 @@ class NuclearTestApp:
             # Print results
             print("\nNuclear Test Results:")
             print("-" * 50)
-            print(f"Total Nuclear Capacity: {nuclear_stats['total_nuclear_capacity']:.2f} MW")
-            print(f"Current Nuclear Generation: {nuclear_stats['current_nuclear_generation']:.2f} MW")
-            print(f"Nuclear Capacity Factor: {nuclear_stats['nuclear_capacity_factor']:.1%}")
-            print(f"Hours at Full Capacity: {nuclear_stats['hours_at_full_capacity']:.1f}")
+            print(f"Nuclear Coverage: {nuclear_stats['nuclear_percentage']:.1f}%")
+            print(f"Total Nuclear Generation: {nuclear_stats['total_nuclear']:.2f} MW")
+            print(f"Total Load: {nuclear_stats['total_load']:.2f} MW")
+            print(f"Hours at Full Coverage: {nuclear_stats['full_coverage_hours']:.1f}%")
             print(f"Chart saved to: {chart_path}")
             print("-" * 50)
             
@@ -73,7 +76,7 @@ def main():
     load_dotenv()
     
     # Check for required environment variables
-    required_env_vars = ['EIA_API_KEY']
+    required_env_vars = ['EIA_API_KEY', 'GRIDSTATUS_API_KEY']
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")

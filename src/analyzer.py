@@ -67,7 +67,7 @@ class NuclearAnalyzer:
             period_start_utc = period_start_local.tz_convert(pytz.UTC)
             
             # Get recent load data
-            recent_load = load_df[load_df['interval_start_utc'] >= period_start_utc]
+            recent_load = load_df[load_df['interval_start_utc'] >= period_start_utc].copy()
             
             # Update nuclear data and get generation estimates
             self.nuclear_manager.update_data()
@@ -87,10 +87,19 @@ class NuclearAnalyzer:
             nuclear_percentage = (total_nuclear / total_load) * 100
             
             # Calculate hours where nuclear could cover 100% of load
+            # Ensure timestamps are in UTC for merging
             nuclear_df = pd.DataFrame({
-                'timestamp': nuclear_gen['timestamp'].unique(),
-                'total_nuclear': nuclear_gen.groupby('timestamp')['estimated_mw'].sum()
+                'timestamp': pd.to_datetime(nuclear_gen['timestamp']).dt.tz_localize('UTC') if nuclear_gen['timestamp'].dt.tz is None else nuclear_gen['timestamp'],
+                'total_nuclear': nuclear_gen.groupby('timestamp')['estimated_mw'].sum().values
             })
+            
+            # Ensure timestamp is not an index
+            if nuclear_df.index.name == 'timestamp':
+                nuclear_df = nuclear_df.reset_index(drop=True)
+            
+            # Ensure interval_start_utc is in UTC for merging
+            if recent_load['interval_start_utc'].dt.tz is None:
+                recent_load['interval_start_utc'] = recent_load['interval_start_utc'].dt.tz_localize('UTC')
             
             merged = pd.merge(
                 recent_load, 

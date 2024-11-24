@@ -99,9 +99,15 @@ class GridDataLoader:
                     if not df.empty:
                         self.db.upsert_data(df)
             
-            return self.db.get_data_since(
+            # Get data from database for analysis
+            df = self.db.get_data_since(
                 (end_time - timedelta(days=self.config['days_back'])).isoformat()
             )
+            
+            if df.empty:
+                raise ValueError("No load data available for analysis")
+            
+            return df
             
         except Exception as e:
             logger.error(f"Error fetching data: {str(e)}")
@@ -112,12 +118,15 @@ class GridDataLoader:
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df)
         
+        # Handle missing or invalid values
         df = df.dropna(subset=['interval_start_utc', 'interval_end_utc', 'load.comed'])
+        df = df[df['load.comed'] >= 0]  # Filter out negative load values
         
         if df.empty:
             logger.warning("No valid data after filtering NaN values")
             return df
         
+        # Ensure proper timezone handling
         for col in ['interval_start_utc', 'interval_end_utc']:
             if df[col].dt.tz is None:
                 df[col] = pd.to_datetime(df[col]).dt.tz_localize('UTC')
@@ -140,14 +149,19 @@ class NRCDataLoader(NuclearDataLoader):
             # Parse the pipe-delimited data
             lines = response.text.strip().split('\n')
             data = []
-            for line in lines:
-                if '|' in line:  # Skip header or malformed lines
+            # Skip the header row
+            for line in lines[1:]:  # Start from index 1 to skip header
+                if '|' in line:  # Skip malformed lines
                     date_str, unit, power = line.strip().split('|')
-                    data.append({
-                        'report_date': pd.to_datetime(date_str),
-                        'unit_name': unit.strip(),
-                        'power_pct': float(power.strip())
-                    })
+                    try:
+                        data.append({
+                            'report_date': pd.to_datetime(date_str.strip()).tz_localize('UTC'),
+                            'unit_name': unit.strip(),
+                            'power_pct': float(power.strip())
+                        })
+                    except ValueError as e:
+                        logger.warning(f"Skipping malformed line: {line}. Error: {str(e)}")
+                        continue
             
             df = pd.DataFrame(data)
             
@@ -205,7 +219,15 @@ class EIADataLoader(NuclearDataLoader):
             if 'response' not in data or 'data' not in data['response']:
                 raise DataFetchError("Invalid response format from EIA API")
             
-            df = pd.DataFrame(data['response']['data'])
+            # Extract and rename columns to match our schema
+            raw_df = pd.DataFrame(data['response']['data'])
+            df = pd.DataFrame({
+                'period': raw_df['period'],
+                'plant_id': raw_df['plantid'].astype(str),  # Convert to string to match config
+                'generator_id': raw_df['generatorid'],
+                'net_summer_capacity_mw': raw_df['net-summer-capacity-mw'],
+                'net_winter_capacity_mw': raw_df['net-winter-capacity-mw']
+            })
             
             if not df.empty:
                 self.db.upsert_eia_data(df)
