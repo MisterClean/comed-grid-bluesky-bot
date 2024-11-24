@@ -4,9 +4,9 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-from .data_loader import GridDataLoader
-from .visualizer import LoadVisualizer
-from .analyzer import LoadAnalyzer
+from .data_loader import GridDataLoader, NuclearDataManager
+from .visualizer import LoadVisualizer, NuclearVisualizer
+from .analyzer import LoadAnalyzer, NuclearAnalyzer
 from .bluesky_poster import BlueSkyPoster
 from .utils.logger import setup_logger
 from .utils.config import load_config
@@ -16,76 +16,96 @@ logger = setup_logger()
 class ComedLoadApp:
     def __init__(self):
         self.config = load_config()
-        self.data_loader = GridDataLoader()
-        self.visualizer = LoadVisualizer()
-        self.analyzer = LoadAnalyzer()
+        self.processes = self.config['posting']['processes']
+        
+        # Initialize components based on enabled processes
+        if self.processes['load']['enabled']:
+            self.data_loader = GridDataLoader()
+            self.load_visualizer = LoadVisualizer()
+            self.load_analyzer = LoadAnalyzer()
+            
+        if self.processes['nuclear']['enabled']:
+            self.nuclear_manager = NuclearDataManager()
+            self.nuclear_visualizer = NuclearVisualizer()
+            self.nuclear_analyzer = NuclearAnalyzer()
+            
         self.poster = BlueSkyPoster()
         
         # Ensure output directory exists
         self.output_dir = Path('output')
         self.output_dir.mkdir(exist_ok=True)
 
-    def generate_chart_filename(self):
-        """Generate a unique filename for the chart"""
+    def generate_chart_filename(self, prefix):
+        """Generate a unique filename for a chart"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        return self.output_dir / f'comed_load_{timestamp}.png'
+        return self.output_dir / f'{prefix}_{timestamp}.png'
 
     def run(self):
         """Run the main application logic"""
         try:
-            logger.info("Starting ComEd Load update cycle")
+            logger.info("Starting ComEd update cycle")
+            success = True
             
-            # Fetch data
-            logger.info("Fetching load data")
-            df = self.data_loader.get_load_data()
-            if df.empty:
-                raise ValueError("No data received from GridStatus API")
+            # Process load data if enabled
+            if self.processes['load']['enabled']:
+                try:
+                    logger.info("Processing load data")
+                    load_df = self.data_loader.get_load_data()
+                    if load_df.empty:
+                        raise ValueError("No data received from GridStatus API")
 
-            # Generate chart
-            logger.info("Generating visualization")
-            chart_path = self.generate_chart_filename()
-            self.visualizer.create_24h_chart(df, output_path=str(chart_path))
+                    load_chart_path = self.generate_chart_filename('comed_load')
+                    self.load_visualizer.create_24h_chart(load_df, output_path=str(load_chart_path))
+                    load_stats = self.load_analyzer.calculate_stats(load_df)
+                    self.poster.post_load_update(load_stats, str(load_chart_path))
+                    logger.info("Load data processing completed")
+                except Exception as e:
+                    logger.error(f"Error processing load data: {str(e)}")
+                    success = False
 
-            # Calculate statistics
-            logger.info("Calculating load statistics")
-            stats = self.analyzer.calculate_stats(df)
+            # Process nuclear data if enabled
+            if self.processes['nuclear']['enabled']:
+                try:
+                    logger.info("Processing nuclear data")
+                    self.nuclear_manager.update_data()
+                    nuclear_stats = self.nuclear_analyzer.calculate_stats(load_df if 'load_df' in locals() else None)
+                    
+                    nuclear_chart_path = self.generate_chart_filename('nuclear_vs_load')
+                    self.nuclear_visualizer.create_nuclear_vs_load_chart(
+                        nuclear_stats['load_data'],
+                        nuclear_stats['nuclear_data'],
+                        output_path=str(nuclear_chart_path)
+                    )
+                    
+                    self.poster.post_nuclear_update(nuclear_stats, str(nuclear_chart_path))
+                    logger.info("Nuclear data processing completed")
+                except Exception as e:
+                    logger.error(f"Error processing nuclear data: {str(e)}")
+                    success = False
 
-            # Post update
-            logger.info("Posting update to BlueSky")
-            self.poster.post_update(stats, str(chart_path))
-
-            logger.info("Update cycle completed successfully")
-            return True
+            logger.info("Update cycle completed")
+            return success
 
         except Exception as e:
             logger.error(f"Error in main execution: {str(e)}")
-            # Optionally send notification about failure
             self.handle_error(e)
             return False
 
     def handle_error(self, error):
         """Handle application errors"""
         error_msg = f"ComEd Load Bot Error: {str(error)}"
-        
-        # Log the full error with traceback
         logger.exception(error_msg)
-        
-        # If configured, could send error notification
-        # self.send_error_notification(error_msg)
-        
-        # Optionally post error status to monitoring service
-        # self.update_monitoring_status('error', error_msg)
 
 def cleanup_old_files():
     """Clean up old chart files"""
     try:
         output_dir = Path('output')
         if output_dir.exists():
-            # Keep only the 5 most recent files
-            files = sorted(output_dir.glob('comed_load_*.png'), 
+            # Keep only the 10 most recent files (5 each for load and nuclear)
+            files = sorted(output_dir.glob('*.png'), 
                          key=lambda x: x.stat().st_mtime, 
                          reverse=True)
-            for file in files[5:]:  # Keep 5 most recent files
+            for file in files[10:]:  # Keep 10 most recent files
                 file.unlink()
     except Exception as e:
         logger.error(f"Error cleaning up old files: {e}")
@@ -94,8 +114,16 @@ def main():
     # Load environment variables
     load_dotenv()
     
-    # Basic environment check
-    required_env_vars = ['GRIDSTATUS_API_KEY', 'BLUESKY_USERNAME', 'BLUESKY_PASSWORD']
+    # Check required environment variables based on enabled processes
+    config = load_config()
+    processes = config['posting']['processes']
+    
+    required_env_vars = ['BLUESKY_USERNAME', 'BLUESKY_PASSWORD']
+    if processes['load']['enabled']:
+        required_env_vars.append('GRIDSTATUS_API_KEY')
+    if processes['nuclear']['enabled']:
+        required_env_vars.append('EIA_API_KEY')
+    
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")

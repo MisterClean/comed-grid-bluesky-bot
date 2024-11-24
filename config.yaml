@@ -22,3 +22,40 @@ posting:
   include_images: true
   retry_attempts: 3
   include_source_link: true
+  processes:
+    load:
+      enabled: false
+    nuclear:
+      enabled: true
+
+nuclear_data:
+  nrc:
+    url: "https://www.nrc.gov/reading-rm/doc-collections/event-status/reactor-status/powerreactorstatusforlast365days.txt"
+    plants:
+      - "Braidwood 1"
+      - "Braidwood 2"
+      - "Byron 1"
+      - "Byron 2"
+      - "Dresden 2"
+      - "Dresden 3"
+      - "LaSalle 1"
+      - "LaSalle 2"
+  eia:
+    plant_ids:
+      - "6022"  # Braidwood
+      - "6023"  # Byron
+      - "869"   # Dresden
+      - "6026"  # LaSalle
+    plant_mappings:
+      Braidwood:
+        nrc_names: ["Braidwood 1", "Braidwood 2"]
+        eia_plant_id: "6022"
+      Byron:
+        nrc_names: ["Byron 1", "Byron 2"]
+        eia_plant_id: "6023"
+      Dresden:
+        nrc_names: ["Dresden 2", "Dresden 3"]
+        eia_plant_id: "869"
+      LaSalle:
+        nrc_names: ["LaSalle 1", "LaSalle 2"]
+        eia_plant_id: "6026"
