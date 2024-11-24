@@ -1,6 +1,6 @@
 data_settings:
   days_back: 2
-  initial_days_back: 3
+  initial_days_back: 5
   limit: 10000
   dataset: "pjm_standardized_5_min"
   columns:
@@ -10,12 +10,6 @@ data_settings:
   timezones:
     source: "UTC"
     target: "America/Chicago"
-
-visualization:
-  chart_width: 12
-  chart_height: 6
-  dpi: 300
-  hour_interval: 3
 
 posting:
   interval_hours: 4

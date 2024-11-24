@@ -67,8 +67,8 @@ class Visualizer(ABC):
     """Abstract base class for visualization operations."""
     
     @abstractmethod
-    def create_24h_chart(self, df: pd.DataFrame, output_path: str) -> None:
-        """Create a 24-hour load chart visualization.
+    def create_load_chart(self, df: pd.DataFrame, output_path: str) -> None:
+        """Create a load chart visualization.
         
         Args:
             df: DataFrame containing the load data

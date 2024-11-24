@@ -23,25 +23,20 @@ class LoadVisualizer:
         # Adjust figure size to 3:2 aspect ratio while staying under 2000x2000 pixels
         plt.rcParams['figure.figsize'] = [12, 8]  # 3:2 ratio
 
-    def create_24h_chart(self, df, output_path=None, timezone=None):
-        """Create a chart of the last 48 hours of load data"""
+    def create_load_chart(self, df, output_path=None, timezone=None):
+        """Create a chart of the last 24 hours of load data"""
         try:
             # Use provided timezone or default to config
             tz = timezone if timezone is not None else self.timezone
             now = datetime.now(tz)
-            two_days_ago = now - timedelta(days=2)
+            one_day_ago = now - timedelta(days=1)
             
             # Convert UTC timestamps to target timezone for display
             plot_data = df.copy()
             plot_data['display_time'] = plot_data['interval_start_utc'].dt.tz_convert(tz)
             
-            # Filter last 48 hours based on target timezone
-            plot_data = plot_data[plot_data['display_time'] >= two_days_ago]
-            
-            # Split data into two 24-hour periods
-            one_day_ago = now - timedelta(days=1)
-            last_24h = plot_data[plot_data['display_time'] >= one_day_ago]
-            previous_24h = plot_data[(plot_data['display_time'] < one_day_ago) & (plot_data['display_time'] >= two_days_ago)]
+            # Filter last 24 hours based on target timezone
+            plot_data = plot_data[plot_data['display_time'] >= one_day_ago]
             
             # Create figure with specific background color
             fig = plt.figure(facecolor='white')
@@ -63,7 +58,7 @@ class LoadVisualizer:
                 """Format datetime to include specific time"""
                 return dt.strftime('%-I:%M %p').lower()
             
-            def add_stats_box(stats, position='left'):
+            def add_stats_box(stats):
                 """Add a box containing max/min stats"""
                 bbox_props = dict(
                     boxstyle="round,pad=0.5",
@@ -75,13 +70,10 @@ class LoadVisualizer:
                 # Format the text for the box
                 max_time = format_time(stats['max_time'])
                 min_time = format_time(stats['min_time'])
-                text = f"{stats['period']}\nMax Load: {int(stats['max_val']):,} MW at {max_time}\nMin Load: {int(stats['min_val']):,} MW at {min_time}"
+                text = f"Last 24 hours\nMax Load: {int(stats['max_val']):,} MW at {max_time}\nMin Load: {int(stats['min_val']):,} MW at {min_time}"
                 
-                # Position the box at the bottom
-                x = 0.02 if position == 'left' else 0.52
-                
-                # Add text box - always left aligned now
-                ax.text(x, 0.02, text,
+                # Add text box
+                ax.text(0.02, 0.02, text,
                        transform=ax.transAxes,
                        bbox=bbox_props,
                        ha='left',
@@ -89,43 +81,23 @@ class LoadVisualizer:
                        fontsize=10)
             
             # Add points for max/min values
-            if not last_24h.empty:
-                max_last = last_24h.loc[last_24h['load.comed'].idxmax()]
-                min_last = last_24h.loc[last_24h['load.comed'].idxmin()]
+            if not plot_data.empty:
+                max_point = plot_data.loc[plot_data['load.comed'].idxmax()]
+                min_point = plot_data.loc[plot_data['load.comed'].idxmin()]
                 
-                # Plot max/min points for last 24h
-                plt.plot([max_last['display_time']], [max_last['load.comed']], 'o', 
+                # Plot max/min points
+                plt.plot([max_point['display_time']], [max_point['load.comed']], 'o', 
                         color=max_color, markersize=8, zorder=2)
-                plt.plot([min_last['display_time']], [min_last['load.comed']], 'o',
+                plt.plot([min_point['display_time']], [min_point['load.comed']], 'o',
                         color=min_color, markersize=8, zorder=2)
                 
-                # Add stats box for last 24h
+                # Add stats box
                 add_stats_box({
-                    'period': 'Last 24 hours',
-                    'max_val': max_last['load.comed'],
-                    'min_val': min_last['load.comed'],
-                    'max_time': max_last['display_time'],
-                    'min_time': min_last['display_time']
-                }, position='right')
-
-            if not previous_24h.empty:
-                max_prev = previous_24h.loc[previous_24h['load.comed'].idxmax()]
-                min_prev = previous_24h.loc[previous_24h['load.comed'].idxmin()]
-                
-                # Plot max/min points for previous 24h
-                plt.plot([max_prev['display_time']], [max_prev['load.comed']], 'o',
-                        color=max_color, markersize=8, zorder=2)
-                plt.plot([min_prev['display_time']], [min_prev['load.comed']], 'o',
-                        color=min_color, markersize=8, zorder=2)
-                
-                # Add stats box for previous 24h
-                add_stats_box({
-                    'period': 'Yesterday',
-                    'max_val': max_prev['load.comed'],
-                    'min_val': min_prev['load.comed'],
-                    'max_time': max_prev['display_time'],
-                    'min_time': min_prev['display_time']
-                }, position='left')
+                    'max_val': max_point['load.comed'],
+                    'min_val': min_point['load.comed'],
+                    'max_time': max_point['display_time'],
+                    'min_time': min_point['display_time']
+                })
             
             # Set y-axis limits
             min_load = plot_data['load.comed'].min()
@@ -138,10 +110,19 @@ class LoadVisualizer:
                     fontweight='bold')
             
             # Subtitle with left alignment
-            ax.text(0.0, 1.05, 'Last 48 hours, 5 minute intervals (Megawatts)',
+            ax.text(0.0, 1.05, 'Last 24 hours, 5 minute intervals (Megawatts)',
                     transform=ax.transAxes,
                     fontsize=12,
                     color='gray')
+            
+            # Add attribution text at bottom right
+            ax.text(0.98, 0.02, 'Data From Grid Status',
+                   transform=ax.transAxes,
+                   ha='right',
+                   va='bottom',
+                   fontsize=8,
+                   color='gray',
+                   style='italic')
             
             # Remove labels since units are in subtitle
             plt.xlabel('')
@@ -172,7 +153,7 @@ class LoadVisualizer:
             plt.subplots_adjust(top=0.75, bottom=0.2)  # Decreased top margin to create more space above title
             
             # Use provided output path or default
-            output_path = output_path or 'output/comed_load_48h.png'
+            output_path = output_path or 'output/comed_load_24h.png'
             
             # Save with optimized settings for Bluesky
             plt.savefig(output_path, 

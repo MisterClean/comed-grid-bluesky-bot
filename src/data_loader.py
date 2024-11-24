@@ -166,8 +166,10 @@ class GridDataLoader(DataLoader):
         Returns:
             pd.DataFrame: Processed DataFrame with consistent formatting
         """
+        # Convert to DataFrame if needed and create an explicit copy
         if not isinstance(df, pd.DataFrame):
             df = pd.DataFrame(df)
+        df = df.copy()
         
         # Drop any rows with NaN values
         df = df.dropna(subset=['interval_start_utc', 'interval_end_utc', 'load.comed'])
@@ -176,9 +178,9 @@ class GridDataLoader(DataLoader):
             logger.warning("No valid data after filtering NaN values")
             return df
         
-        # Ensure UTC timestamps
+        # Convert timestamps using loc accessor
         for col in ['interval_start_utc', 'interval_end_utc']:
-            df[col] = df[col].apply(lambda x: self._ensure_utc_timestamp(pd.to_datetime(x)))
+            df.loc[:, col] = df[col].apply(lambda x: self._ensure_utc_timestamp(pd.to_datetime(x)))
         
         return df
 

@@ -83,7 +83,7 @@ class BlueSkyPoster(SocialPoster):
             raise PostingError(error_msg)
 
     def _format_post_text(self, stats: Dict[str, Any]) -> str:
-        """Format statistics into a post message.
+        """Format statistics into a post message that fits BlueSky's 300 character limit.
         
         Args:
             stats: Dictionary containing load statistics
@@ -91,11 +91,13 @@ class BlueSkyPoster(SocialPoster):
         Returns:
             str: Formatted post text
         """
+        # Use the period summary directly since it's already properly formatted
         text = stats['period_summary']
         
-        if self.config['include_source_link']:
-            text += "\n\nData source: PJM Interconnection"
-        
+        # Final safety check - truncate if too long
+        if len(text) > 300:
+            text = text[:297] + "..."
+            
         return text
 
     def _upload_image(self, image_path: str) -> Dict[str, Any]:
@@ -145,16 +147,34 @@ class BlueSkyPoster(SocialPoster):
                 embed = {
                     '$type': 'app.bsky.embed.images',
                     'images': [{
-                        'alt': 'ComEd Grid Load Chart',
+                        'alt': 'ComEd Grid Load Chart - Last 24 hours of power consumption in megawatts. Data From Grid Status',
                         'image': image_blob,
                         'aspectRatio': {'width': 16, 'height': 9}
                     }]
                 }
+
+                # Find byte indices for the link text
+                link_text = "Data From Grid Status"
+                byte_start = text.encode('utf-8').find(link_text.encode('utf-8'))
+                byte_end = byte_start + len(link_text.encode('utf-8'))
+
+                # Create facet for the link
+                facets = [{
+                    'index': {
+                        'byteStart': byte_start,
+                        'byteEnd': byte_end
+                    },
+                    'features': [{
+                        '$type': 'app.bsky.richtext.facet#link',
+                        'uri': 'https://www.gridstatus.io/'
+                    }]
+                }]
                 
                 # Create the post record data
                 record = {
                     'text': text,
                     'embed': embed,
+                    'facets': facets,
                     'createdAt': datetime.now(pytz.UTC).isoformat(),
                     '$type': 'app.bsky.feed.post'
                 }

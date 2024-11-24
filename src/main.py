@@ -1,8 +1,9 @@
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
 from dotenv import load_dotenv
 
@@ -89,7 +90,7 @@ class ComedLoadApp:
             # Generate chart
             logger.info("Generating visualization")
             chart_path = self.generate_chart_filename()
-            self.visualizer.create_24h_chart(df, str(chart_path))
+            self.visualizer.create_load_chart(df, str(chart_path))
 
             # Calculate statistics
             logger.info("Calculating load statistics")
@@ -138,13 +139,33 @@ class ComedLoadApp:
         
         # Log the full error with traceback
         logger.exception(error_msg)
-        
-        # Here you could add additional error handling:
-        # - Send error notifications (email, Slack, etc.)
-        # - Update monitoring systems
-        # - Trigger fallback procedures
-        # self.notify_error(error_msg)
-        # self.update_monitoring_status('error', error_msg)
+
+    def run_scheduled(self) -> None:
+        """Run the application on a schedule based on config interval."""
+        interval_hours = self.config['posting']['interval_hours']
+        logger.info(f"Starting scheduled execution with {interval_hours} hour interval")
+
+        while True:
+            try:
+                # Run the main application logic
+                self.run()
+                
+                # Calculate next run time
+                next_run = datetime.now() + timedelta(hours=interval_hours)
+                logger.info(f"Next update scheduled for: {next_run.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Sleep until next run time
+                sleep_seconds = (next_run - datetime.now()).total_seconds()
+                if sleep_seconds > 0:
+                    time.sleep(sleep_seconds)
+                    
+            except KeyboardInterrupt:
+                logger.info("Scheduled execution stopped by user")
+                break
+            except Exception as e:
+                logger.error(f"Error in scheduled execution: {str(e)}")
+                # Sleep for 5 minutes before retrying on error
+                time.sleep(300)
 
 def cleanup_old_files(max_files: int = 5) -> None:
     """Clean up old chart files.
@@ -191,15 +212,9 @@ def main() -> None:
         # Check environment
         check_environment()
         
-        # Initialize and run application
+        # Initialize and run application with scheduling
         app = ComedLoadApp()
-        success = app.run()
-        
-        # Clean up old files
-        cleanup_old_files()
-        
-        # Exit with appropriate status code
-        sys.exit(0 if success else 1)
+        app.run_scheduled()
         
     except KeyboardInterrupt:
         logger.info("Application stopped by user")
