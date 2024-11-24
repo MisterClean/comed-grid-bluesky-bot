@@ -4,12 +4,12 @@ import sys
 from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
-from src.data_loader import GridDataLoader
-from src.visualizer import LoadVisualizer
-from src.analyzer import LoadAnalyzer
-from src.bluesky_poster import BlueSkyPoster
-from src.utils.logger import setup_logger
-from src.utils.config import load_config
+from .data_loader import GridDataLoader
+from .visualizer import LoadVisualizer
+from .analyzer import LoadAnalyzer
+from .bluesky_poster import BlueSkyPoster
+from .utils.logger import setup_logger
+from .utils.config import load_config
 
 logger = setup_logger()
 

@@ -1,5 +1,6 @@
 data_settings:
   days_back: 1
+  initial_days_back: 3
   limit: 10000
   dataset: "pjm_standardized_5_min"
   columns:

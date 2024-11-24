@@ -31,10 +31,15 @@ class LoadVisualizer:
             now = datetime.now(tz)
             yesterday = now - timedelta(days=1)
             
-            plot_data = df[df['interval_start_central'] >= yesterday].copy()
+            # Convert UTC timestamps to target timezone for display
+            plot_data = df.copy()
+            plot_data['display_time'] = plot_data['interval_start_utc'].dt.tz_convert(tz)
+            
+            # Filter last 24 hours based on target timezone
+            plot_data = plot_data[plot_data['display_time'] >= yesterday]
             
             plt.figure()
-            plt.plot(plot_data['interval_start_central'], 
+            plt.plot(plot_data['display_time'], 
                     plot_data['load.comed'], 
                     linewidth=2)
             
