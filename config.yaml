@@ -40,12 +40,15 @@ nuclear_data:
       - "Dresden 3"
       - "LaSalle 1"
       - "LaSalle 2"
+      - "Quad Cities 1"
+      - "Quad Cities 2"
   eia:
     plant_ids:
       - "6022"  # Braidwood
       - "6023"  # Byron
       - "869"   # Dresden
       - "6026"  # LaSalle
+      - "880"  # Quad Cities
     plant_mappings:
       Braidwood:
         nrc_names: ["Braidwood 1", "Braidwood 2"]
@@ -59,3 +62,6 @@ nuclear_data:
       LaSalle:
         nrc_names: ["LaSalle 1", "LaSalle 2"]
         eia_plant_id: "6026"
+      Quad Cities:
+        nrc_names: ["Quad Cities 1", "Quad Cities 2"]
+        eia_plant_id: "880"

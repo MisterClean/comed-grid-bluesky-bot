@@ -103,14 +103,13 @@ class NuclearVisualizer:
             load_data['display_time'] = load_data['interval_start_utc'].dt.tz_convert(tz)
             
             nuclear_data = nuclear_df.copy()
-            nuclear_data['display_time'] = nuclear_data['timestamp'].dt.tz_convert(tz)
+            # Ensure nuclear data has timestamp column
+            time_col = 'timestamp' if 'timestamp' in nuclear_data.columns else 'interval_start_utc'
+            nuclear_data['display_time'] = nuclear_data[time_col].dt.tz_convert(tz)
             
             # Filter last 24 hours based on target timezone
             load_data = load_data[load_data['display_time'] >= yesterday]
             nuclear_data = nuclear_data[nuclear_data['display_time'] >= yesterday]
-            
-            # Calculate total nuclear generation per timestamp
-            nuclear_totals = nuclear_data.groupby('display_time')['estimated_mw'].sum().reset_index()
             
             plt.figure()
             
@@ -122,8 +121,8 @@ class NuclearVisualizer:
                     label='Load')
             
             # Plot nuclear generation
-            plt.plot(nuclear_totals['display_time'],
-                    nuclear_totals['estimated_mw'],
+            plt.plot(nuclear_data['display_time'],
+                    nuclear_data['estimated_mw'],
                     color='navy',
                     linewidth=2,
                     label='Nuclear Generation')
@@ -132,6 +131,17 @@ class NuclearVisualizer:
             
             # Add legend
             plt.legend(loc='upper right')
+            
+            # Set dynamic y-axis limits with 2000MW buffer
+            max_load = load_data['load.comed'].max()
+            max_nuclear = nuclear_data['estimated_mw'].max()
+            max_value = max(max_load, max_nuclear)
+            plt.ylim(0, max_value + 2000)
+            
+            # Log the maximum values for debugging
+            logger.info(f"Maximum load: {max_load:.0f} MW")
+            logger.info(f"Maximum nuclear generation: {max_nuclear:.0f} MW")
+            logger.info(f"Setting y-axis limit to: {max_value + 2000:.0f} MW")
             
             # Use provided output path or default
             output_path = output_path or 'output/nuclear_vs_load_24h.png'

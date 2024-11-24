@@ -4,7 +4,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 from datetime import datetime, timedelta
 import pytz
-from .data_loader import NuclearDataManager, GridDataLoader
+import pandas as pd
+from .data_loader import NuclearDataManager
 from .visualizer import NuclearVisualizer
 from .analyzer import NuclearAnalyzer
 from .utils.logger import setup_logger
@@ -18,7 +19,6 @@ class NuclearTestApp:
         self.nuclear_manager = NuclearDataManager()
         self.nuclear_visualizer = NuclearVisualizer()
         self.nuclear_analyzer = NuclearAnalyzer()
-        self.grid_loader = GridDataLoader()
         
         # Ensure output directory exists
         self.output_dir = Path('output')
@@ -29,25 +29,52 @@ class NuclearTestApp:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         return self.output_dir / f'nuclear_test_{timestamp}.png'
 
+    def create_mock_load_data(self):
+        """Create mock load data for testing"""
+        # Create dates in UTC
+        now = datetime.now(pytz.UTC)
+        
+        # Create 24 hours of mock data
+        dates = pd.date_range(
+            end=now, 
+            periods=24, 
+            freq='H',
+            tz='UTC'  # Explicitly set timezone to UTC
+        )
+        
+        # Create mock load values (simulating typical load pattern)
+        mock_load = [
+            15000 + (i * 500 if i < 12 else (24 - i) * 500)  # Simple pattern
+            for i in range(24)
+        ]
+        
+        return pd.DataFrame({
+            'interval_start_utc': dates,
+            'load.comed': mock_load
+        })
+
     def run(self):
         """Run nuclear data processing test"""
         try:
             logger.info("Starting Nuclear data test")
             
-            # Get load data for the last 24 hours
-            logger.info("Fetching load data")
-            load_df = self.grid_loader.get_load_data()
+            # Use mock load data instead of fetching from API
+            logger.info("Creating mock load data")
+            load_df = self.create_mock_load_data()
             if load_df.empty:
-                raise ValueError("No load data available")
+                raise ValueError("Failed to create mock load data")
             
-            # Update nuclear data
-            logger.info("Fetching and processing nuclear data")
-            self.nuclear_manager.update_data()
-            
-            # Calculate nuclear statistics
+            # Calculate nuclear statistics (this will also update nuclear data)
+            logger.info("Calculating nuclear statistics")
             nuclear_stats = self.nuclear_analyzer.calculate_stats(load_df)
             
-            # Generate test chart
+            # Debug log nuclear data structure
+            nuclear_data = nuclear_stats['nuclear_data']
+            logger.info(f"Nuclear data columns: {nuclear_data.columns.tolist()}")
+            logger.info(f"Nuclear data sample:\n{nuclear_data.head()}")
+            logger.info(f"Nuclear data info:\n{nuclear_data.info()}")
+            
+            # Generate test chart using the processed data from stats
             chart_path = self.generate_chart_filename()
             self.nuclear_visualizer.create_nuclear_vs_load_chart(
                 nuclear_stats['load_data'],
@@ -76,7 +103,7 @@ def main():
     load_dotenv()
     
     # Check for required environment variables
-    required_env_vars = ['EIA_API_KEY', 'GRIDSTATUS_API_KEY']
+    required_env_vars = ['EIA_API_KEY']  # Removed GRIDSTATUS_API_KEY since we're not using it
     missing_vars = [var for var in required_env_vars if not os.getenv(var)]
     if missing_vars:
         logger.error(f"Missing required environment variables: {', '.join(missing_vars)}")

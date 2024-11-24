@@ -142,7 +142,7 @@ class NuclearAnalyzer:
                 'end_time': now_local,
                 'total_nuclear': total_nuclear,
                 'total_load': total_load,
-                'nuclear_data': nuclear_gen,  # Include for visualization
+                'nuclear_data': nuclear_df,  # Use resampled data instead of raw data
                 'load_data': recent_load      # Include for visualization
             }
             
