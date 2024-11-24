@@ -1,12 +1,18 @@
 # ComEd Load Bot
 
-A Python application that monitors and reports ComEd region load data from the PJM Interconnection grid. The bot posts updates to Bluesky every 4 hours with load statistics and visualizations.
+A Python application that monitors and reports ComEd region load data from the PJM Interconnection grid. The bot posts updates to Bluesky every 4 hours with load statistics and visualizations. Data is provided by [GridStatus.io](https://www.gridstatus.io), a comprehensive API for accessing power grid data.
 
 ## Features
 
 - Fetches ComEd zone load data from the PJM Interconnection grid via GridStatus API
 - Calculates load statistics for 4-hour periods
-- Generates 24-hour load visualizations with customizable formatting
+- Generates 24-hour load visualizations with:
+  - Custom styling and themes
+  - Dynamic color schemes based on load levels
+  - Configurable chart dimensions and DPI
+  - Automatic grid line and label formatting
+  - Smart timestamp handling
+  - Flexible hour interval markers
 - Posts updates to Bluesky with optional source link inclusion
 - Smart file management (auto-cleanup of old chart files)
 - Comprehensive timezone handling (UTC to Central Time)
@@ -14,6 +20,9 @@ A Python application that monitors and reports ComEd region load data from the P
 - Automatic retry mechanism for failed posts
 - Comprehensive logging and error handling
 - Configuration-driven behavior
+- SQLite database for efficient data storage and retrieval
+- Robust data analysis with statistical computations
+- Flexible text formatting for social media posts
 
 ## Prerequisites
 
@@ -54,16 +63,19 @@ BLUESKY_PASSWORD=your_bluesky_password
 .
 ├── __init__.py
 ├── config.yaml          # Application configuration
-├── main.py             # Application entry point
 ├── readme.md
 ├── requirements.txt
+├── run.py              # Application entry point
 └── src/
-    └── utils/
-        ├── config.py   # Configuration loader
-        └── logger.py   # Logging setup
+    ├── utils/
+    │   ├── config.py   # Configuration loader
+    │   ├── database.py # Database operations
+    │   ├── logger.py   # Logging setup
+    │   └── text_utils.py # Text formatting utilities
     ├── data_loader.py  # GridStatus API interface
     ├── visualizer.py   # Chart generation
     ├── analyzer.py     # Data analysis
+    ├── interfaces.py   # Type definitions
     └── bluesky_poster.py  # Bluesky integration
 ```
 
@@ -90,6 +102,10 @@ visualization:
   chart_height: 6
   dpi: 300
   hour_interval: 3    # Hour markers on x-axis
+  style:
+    grid: true
+    theme: "seaborn"
+    color_scheme: "viridis"
 
 posting:
   interval_hours: 4    # How often to post updates
@@ -104,7 +120,7 @@ posting:
 
 To run the bot once:
 ```bash
-python main.py
+python run.py
 ```
 
 ### Scheduling Regular Updates
@@ -113,13 +129,13 @@ To run the bot every 4 hours, you can:
 
 1. Use cron (Linux/Mac):
 ```bash
-0 */4 * * * cd /path/to/comed-load-bot && ./venv/bin/python main.py
+0 */4 * * * cd /path/to/comed-load-bot && ./venv/bin/python run.py
 ```
 
 2. Use Task Scheduler (Windows):
 Create a task that runs every 4 hours executing:
 ```bash
-C:\path\to\comed-load-bot\venv\Scripts\python.exe C:\path\to\comed-load-bot\main.py
+C:\path\to\comed-load-bot\venv\Scripts\python.exe C:\path\to\comed-load-bot\run.py
 ```
 
 ## Output Examples
@@ -141,9 +157,12 @@ Minimum Load: 11,234 MW
 - Central Time zone with proper timezone handling
 - Professional formatting with grid lines and clear labels
 - Customizable dimensions and DPI settings
+- Dynamic color schemes based on load levels
+- Automatic axis scaling and formatting
 
 ## Data Management
 
+- SQLite database for efficient data storage
 - Automatic cleanup of old chart files (keeps 5 most recent)
 - Initial data load fetches 3 days of historical data
 - Regular updates fetch 24-hour windows
@@ -158,6 +177,7 @@ Minimum Load: 11,234 MW
   - Using appropriate row limits
   - Minimizing API calls through smart data caching
   - Configurable data fetch windows
+  - Database storage to prevent redundant fetches
 
 ## Error Handling
 
@@ -166,6 +186,7 @@ Minimum Load: 11,234 MW
 - Graceful handling of API failures
 - File system error handling for chart generation
 - Timezone conversion error handling
+- Database transaction management
 
 ## Logging
 
@@ -174,6 +195,7 @@ Logs are written to both stdout and `logs/comed_bot.log`:
 - Retains 7 days of history
 - Includes timestamps, log levels, and function names
 - Detailed error tracking with full tracebacks
+- SQL query logging for debugging
 
 ## Development
 
@@ -182,12 +204,14 @@ Logs are written to both stdout and `logs/comed_bot.log`:
 1. Create new modules in `src/` for major features
 2. Update configuration in `config.yaml` if needed
 3. Add any new dependencies to `requirements.txt`
-4. Update main.py to integrate new features
+4. Update interfaces.py with new type definitions
+5. Add appropriate error handling and logging
+6. Update database schema if needed
 
 ### Running Tests
 
 ```bash
-# TODO: Add testing instructions once tests are implemented
+pytest tests/
 ```
 
 ## Contributing
@@ -204,8 +228,11 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- [GridStatus.io](https://www.gridstatus.io) for providing the API
-- PJM Interconnection for the underlying data
+This project would not be possible without:
+
+- [GridStatus.io](https://www.gridstatus.io) - The backbone of this project, providing comprehensive and reliable power grid data through their excellent API
+- PJM Interconnection for the underlying ComEd zone load data
+- The Python community for the excellent libraries that power this bot
 
 ## Support
 
