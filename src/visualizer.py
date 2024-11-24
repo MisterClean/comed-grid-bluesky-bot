@@ -57,7 +57,7 @@ class LoadVisualizer:
             
             # Define complementary colors for max/min points
             max_color = '#FF9E80'  # Coral/peach color
-            min_color = '#80CBC4'  # Lighter turquoise
+            min_color = '#FFEB3B'  # Yellow
             
             def format_time(dt):
                 """Format datetime to include specific time"""
@@ -75,18 +75,17 @@ class LoadVisualizer:
                 # Format the text for the box
                 max_time = format_time(stats['max_time'])
                 min_time = format_time(stats['min_time'])
-                text = f"{stats['period']}\nMax: {int(stats['max_val']):,} MW at {max_time}\nMin: {int(stats['min_val']):,} MW at {min_time}"
+                text = f"{stats['period']}\nMax Load: {int(stats['max_val']):,} MW at {max_time}\nMin Load: {int(stats['min_val']):,} MW at {min_time}"
                 
-                # Position the box
-                x = 0.02 if position == 'left' else 0.98
-                ha = 'left' if position == 'left' else 'right'
+                # Position the box at the bottom
+                x = 0.02 if position == 'left' else 0.52
                 
-                # Add text box
-                ax.text(x, 0.98, text,
+                # Add text box - always left aligned now
+                ax.text(x, 0.02, text,
                        transform=ax.transAxes,
                        bbox=bbox_props,
-                       ha=ha,
-                       va='top',
+                       ha='left',
+                       va='bottom',
                        fontsize=10)
             
             # Add points for max/min values
@@ -102,7 +101,7 @@ class LoadVisualizer:
                 
                 # Add stats box for last 24h
                 add_stats_box({
-                    'period': 'Last 24h',
+                    'period': 'Last 24 hours',
                     'max_val': max_last['load.comed'],
                     'min_val': min_last['load.comed'],
                     'max_time': max_last['display_time'],
@@ -121,12 +120,16 @@ class LoadVisualizer:
                 
                 # Add stats box for previous 24h
                 add_stats_box({
-                    'period': 'Previous 24h',
+                    'period': 'Yesterday',
                     'max_val': max_prev['load.comed'],
                     'min_val': min_prev['load.comed'],
                     'max_time': max_prev['display_time'],
                     'min_time': min_prev['display_time']
                 }, position='left')
+            
+            # Set y-axis limits
+            min_load = plot_data['load.comed'].min()
+            plt.ylim(min_load - 700, None)  # Set minimum 700 lower than data minimum
             
             # Main title with left alignment
             ax.text(0.0, 1.1, 'ComEd Grid Load', 
@@ -166,7 +169,7 @@ class LoadVisualizer:
             ax.spines['right'].set_visible(False)
             
             # Add padding at the top for the titles and bottom for rotated labels
-            plt.subplots_adjust(top=0.85, bottom=0.2)
+            plt.subplots_adjust(top=0.75, bottom=0.2)  # Decreased top margin to create more space above title
             
             # Use provided output path or default
             output_path = output_path or 'output/comed_load_48h.png'

@@ -1,90 +1,204 @@
-from atproto import Client, client_utils
+from typing import Dict, Any, Optional
 import os
+import time
+from pathlib import Path
+from atproto_client import Client
 from datetime import datetime
+import pytz
+
+from src.interfaces import SocialPoster, PostingError
 from src.utils.logger import setup_logger
 from src.utils.config import load_config
 
 logger = setup_logger()
 
-class BlueSkyPoster:
+class BlueSkyPoster(SocialPoster):
+    """Handles posting updates to BlueSky social network."""
+
     def __init__(self):
-        self.client = self._initialize_client()
+        """Initialize the BlueSkyPoster with configuration and client."""
         self.config = load_config()['posting']
+        self.client: Optional[Client] = None
+        self._initialize_client()
 
-    def _initialize_client(self):
-        """Initialize BlueSky client"""
-        username = os.getenv('BLUESKY_USERNAME')
-        password = os.getenv('BLUESKY_PASSWORD')
+    def _initialize_client(self) -> None:
+        """Initialize the BlueSky API client.
         
-        if not username or not password:
-            raise ValueError("BLUESKY_USERNAME and BLUESKY_PASSWORD must be set")
-        
+        Raises:
+            PostingError: If credentials are missing or authentication fails
+        """
         try:
-            client = Client()
-            profile = client.login(username, password)
-            logger.info(f"Successfully logged into BlueSky as {profile.display_name}")
-            return client
-        except Exception as e:
-            logger.error(f"Failed to initialize BlueSky client: {str(e)}")
-            raise
-
-    def create_post_text(self, stats):
-        """Create formatted post text using TextBuilder"""
-        return (
-            client_utils.TextBuilder()
-            .text(
-                f"ComEd Load Report "
-                f"({stats['start_time'].strftime('%I:%M %p')} - "
-                f"{stats['end_time'].strftime('%I:%M %p')} CT)\n\n"
-                f"Average Load: {stats['average']:,.0f} MW\n"
-                f"Maximum Load: {stats['maximum']:,.0f} MW\n"
-                f"Minimum Load: {stats['minimum']:,.0f} MW\n\n"
-            )
-            .text("Data source: ")
-            .link("PJM Interconnection", "https://www.pjm.com/markets-and-operations")
-        )
-
-    def post_update(self, stats, image_path=None):
-        """Post an update to BlueSky with optional image"""
-        try:
-            # Create post text
-            post_text = self.create_post_text(stats)
+            username = os.getenv('BLUESKY_USERNAME')
+            password = os.getenv('BLUESKY_PASSWORD')
             
-            # Handle image if provided
-            if image_path and self.config.get('include_images', True):
-                try:
-                    with open(image_path, 'rb') as f:
-                        image_data = f.read()
-                        
-                    # Upload image and post
-                    logger.info("Attempting to send post with image")
-                    self.client.send_image(
-                        text=post_text,
-                        image=image_data,
-                        image_alt=f"ComEd load chart for {stats['start_time'].strftime('%Y-%m-%d')}"
+            if not username or not password:
+                raise PostingError(
+                    "BLUESKY_USERNAME and BLUESKY_PASSWORD environment variables must be set"
+                )
+            
+            self.client = Client()
+            self.client.login(username, password)
+            logger.info("Successfully authenticated with BlueSky")
+            
+        except Exception as e:
+            error_msg = f"Failed to initialize BlueSky client: {str(e)}"
+            logger.error(error_msg)
+            raise PostingError(error_msg)
+
+    def post_update(self, stats: Dict[str, Any], chart_path: str) -> bool:
+        """Post an update to BlueSky with load statistics and visualization.
+        
+        Args:
+            stats: Dictionary containing load statistics
+            chart_path: Path to the chart image
+            
+        Returns:
+            bool: True if post was successful, False otherwise
+            
+        Raises:
+            PostingError: If there is an error posting the update
+        """
+        if not self.client:
+            raise PostingError("BlueSky client not initialized")
+
+        try:
+            # Verify chart file exists
+            if not Path(chart_path).exists():
+                raise PostingError(f"Chart file not found: {chart_path}")
+
+            # Format the post text
+            post_text = self._format_post_text(stats)
+            
+            # Upload the image
+            image_blob = self._upload_image(chart_path)
+            
+            # Create the post with retries
+            success = self._create_post_with_retry(post_text, image_blob)
+            
+            return success
+
+        except Exception as e:
+            error_msg = f"Error posting update: {str(e)}"
+            logger.error(error_msg)
+            raise PostingError(error_msg)
+
+    def _format_post_text(self, stats: Dict[str, Any]) -> str:
+        """Format statistics into a post message.
+        
+        Args:
+            stats: Dictionary containing load statistics
+            
+        Returns:
+            str: Formatted post text
+        """
+        text = stats['period_summary']
+        
+        if self.config['include_source_link']:
+            text += "\n\nData source: PJM Interconnection"
+        
+        return text
+
+    def _upload_image(self, image_path: str) -> Dict[str, Any]:
+        """Upload an image to BlueSky.
+        
+        Args:
+            image_path: Path to the image file
+            
+        Returns:
+            Dict[str, Any]: Response containing the uploaded image blob data
+            
+        Raises:
+            PostingError: If image upload fails
+        """
+        try:
+            with open(image_path, 'rb') as f:
+                image_data = f.read()
+            
+            response = self.client.com.atproto.repo.upload_blob(image_data)
+            logger.info("Successfully uploaded image to BlueSky")
+            return response.blob
+            
+        except Exception as e:
+            raise PostingError(f"Failed to upload image: {str(e)}")
+
+    def _create_post_with_retry(
+        self,
+        text: str,
+        image_blob: Dict[str, Any]
+    ) -> bool:
+        """Create a post with retry logic.
+        
+        Args:
+            text: Post text content
+            image_blob: Uploaded image blob data
+            
+        Returns:
+            bool: True if post was successful
+            
+        Raises:
+            PostingError: If all retry attempts fail
+        """
+        retry_count = 0
+        while retry_count < self.config['retry_attempts']:
+            try:
+                # Create embed with image
+                embed = {
+                    '$type': 'app.bsky.embed.images',
+                    'images': [{
+                        'alt': 'ComEd Grid Load Chart',
+                        'image': image_blob,
+                        'aspectRatio': {'width': 16, 'height': 9}
+                    }]
+                }
+                
+                # Create the post record data
+                record = {
+                    'text': text,
+                    'embed': embed,
+                    'createdAt': datetime.now(pytz.UTC).isoformat(),
+                    '$type': 'app.bsky.feed.post'
+                }
+                
+                # Create the post with proper data structure
+                data = {
+                    'collection': 'app.bsky.feed.post',
+                    'repo': self.client.me.did,
+                    'record': record
+                }
+                
+                # Create the post
+                self.client.com.atproto.repo.create_record(data=data)
+                
+                logger.info("Successfully posted update to BlueSky")
+                return True
+                
+            except Exception as e:
+                retry_count += 1
+                if retry_count < self.config['retry_attempts']:
+                    wait_time = 2 ** retry_count  # Exponential backoff
+                    logger.warning(
+                        f"Post attempt {retry_count} failed. "
+                        f"Retrying in {wait_time} seconds..."
                     )
-                    logger.info("Post with image sent successfully")
-                    return
-                    
-                except Exception as e:
-                    logger.error(f"Failed to send post with image: {e}")
-                    logger.info("Falling back to text-only post")
-            
-            # If we reach here, either no image was provided or image posting failed
-            self.client.send_post(text=post_text)
-            logger.info("Text-only post sent successfully")
-            
-        except Exception as e:
-            logger.error(f"Error posting to BlueSky: {str(e)}")
-            raise
+                    time.sleep(wait_time)
+                else:
+                    raise PostingError(
+                        f"Failed to create post after {retry_count} attempts: {str(e)}"
+                    )
+        
+        return False
 
-    def test_post(self):
-        """Send a test post to verify credentials and connectivity"""
-        try:
-            test_text = client_utils.TextBuilder().text("🔍 ComEd Load Bot - Test Post")
-            self.client.send_post(text=test_text)
-            logger.info("Test post sent successfully")
-            return True
-        except Exception as e:
-            logger.error(f"Test post failed: {str(e)}")
-            return False
+    def _format_time(self, dt: datetime) -> str:
+        """Format a datetime object for display.
+        
+        Args:
+            dt: Datetime object to format
+            
+        Returns:
+            str: Formatted time string
+        """
+        if dt.tzinfo is None:
+            dt = pytz.UTC.localize(dt)
+        target_tz = pytz.timezone(self.config['data_settings']['timezones']['target'])
+        local_time = dt.astimezone(target_tz)
+        return local_time.strftime('%I:%M %p %Z')
