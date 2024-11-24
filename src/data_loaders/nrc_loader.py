@@ -1,5 +1,7 @@
 import pandas as pd
 import requests
+from datetime import datetime, timedelta
+import pytz
 from src.utils.logger import setup_logger
 from src.utils.config import load_config
 from src.utils.database import DatabaseManager
@@ -26,8 +28,22 @@ class NRCDataLoader(NuclearDataLoader):
                 if '|' in line:  # Skip malformed lines
                     date_str, unit, power = line.strip().split('|')
                     try:
+                        # Convert the misleading midnight timestamp to actual ~9am Eastern time
+                        # First parse as naive datetime
+                        parsed_date = pd.to_datetime(date_str.strip())
+                        
+                        # Add 9 hours to reflect actual data collection time
+                        actual_time = parsed_date + timedelta(hours=9)
+                        
+                        # Localize to Eastern time
+                        eastern = pytz.timezone('America/New_York')
+                        localized_time = eastern.localize(actual_time)
+                        
+                        # Convert to UTC for storage
+                        utc_time = localized_time.astimezone(pytz.UTC)
+                        
                         data.append({
-                            'report_date': pd.to_datetime(date_str.strip()).tz_localize('UTC'),
+                            'report_date': utc_time,
                             'unit_name': unit.strip(),
                             'power_pct': float(power.strip())
                         })
@@ -43,12 +59,32 @@ class NRCDataLoader(NuclearDataLoader):
             
             if not df.empty:
                 self.db.upsert_nrc_data(df)
+                logger.info(f"Stored NRC data with timestamp {df['report_date'].max()}")
+            else:
+                logger.warning("No valid NRC data found to store")
             
             return df
             
         except Exception as e:
             logger.error(f"Error fetching NRC data: {str(e)}")
             raise DataFetchError(f"Failed to fetch NRC data: {str(e)}")
+
+    def get_latest_available_data(self):
+        """Get the most recent NRC data available, even if not from today"""
+        try:
+            # First try to get fresh data
+            current_data = self.get_reactor_status()
+            
+            if not current_data.empty:
+                return current_data
+            
+            # If no fresh data, get the most recent data from the database
+            logger.info("No fresh NRC data available, retrieving most recent stored data")
+            return self.db.get_latest_nrc_data(self.config['plants'])
+            
+        except Exception as e:
+            logger.error(f"Error getting latest available NRC data: {str(e)}")
+            raise DataFetchError(f"Failed to get latest available NRC data: {str(e)}")
 
     def get_capacity_data(self):
         """This is handled by EIADataLoader"""

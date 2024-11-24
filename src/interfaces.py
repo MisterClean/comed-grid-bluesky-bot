@@ -123,11 +123,34 @@ class NuclearDataLoader(ABC):
     def get_reactor_status(self) -> pd.DataFrame:
         """Fetch current reactor status data.
         
+        Note: This method returns raw reactor status data with timestamps at midnight.
+        For accurate timing that reflects the ~9am Eastern data collection time,
+        use get_latest_available_data() instead.
+        
         Returns:
             pd.DataFrame: DataFrame containing reactor status with columns:
                 - timestamp: UTC timestamp of status
                 - unit: Reactor unit name
                 - power: Power level as decimal (0-1)
+        
+        Raises:
+            DataFetchError: If there is an error fetching the data
+        """
+        pass
+    
+    @abstractmethod
+    def get_latest_available_data(self) -> pd.DataFrame:
+        """Get the most recent available reactor status data.
+        
+        This method handles the actual ~9am Eastern data collection time and
+        falls back to the most recent stored data if fresh data isn't available.
+        This is the preferred method for getting reactor status data.
+        
+        Returns:
+            pd.DataFrame: DataFrame containing reactor status with columns:
+                - report_date: UTC timestamp reflecting actual collection time
+                - unit_name: Reactor unit name
+                - power_pct: Power level percentage (0-100)
         
         Raises:
             DataFetchError: If there is an error fetching the data
