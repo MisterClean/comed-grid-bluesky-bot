@@ -113,8 +113,6 @@ dmypy.json
 *.json
 *.xlsx
 *.xls
-*.db
-*.sqlite3
 
 # Documentation
 /site
