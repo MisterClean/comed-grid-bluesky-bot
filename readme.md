@@ -1,32 +1,50 @@
-# ComEd Load Bot
+# ComEd Grid & Nuclear Bot
 
-A Python application that monitors and reports ComEd region load data from the PJM Interconnection grid. The bot posts updates to Bluesky every 4 hours with load statistics and visualizations.
+A Python application that monitors and reports on the ComEd region grid, including both load data from PJM Interconnection and nuclear generation data from multiple authoritative sources. The bot posts updates to Bluesky every 4 hours with comprehensive grid statistics and visualizations.
 
 ## Features
 
+### Grid Load Monitoring
 - Fetches ComEd zone load data from the PJM Interconnection grid via GridStatus API
 - Calculates load statistics for 4-hour periods
 - Generates 24-hour load visualizations with customizable formatting
-- Posts updates to Bluesky with optional source link inclusion
-- Smart file management (auto-cleanup of old chart files)
+
+### Nuclear Generation Tracking
+- Integrates real-time nuclear reactor status data from the NRC
+- Combines with EIA capacity data to estimate actual nuclear generation
+- Tracks 10 nuclear reactors across 5 plants in the ComEd region:
+  - Braidwood (Units 1 & 2)
+  - Byron (Units 1 & 2)
+  - Dresden (Units 2 & 3)
+  - LaSalle (Units 1 & 2)
+  - Quad Cities (Units 1 & 2)
+
+### Data Management
+- SQLite database for persistent storage of historical data
+- Automatic data validation and deduplication
+- Smart seasonal capacity calculations based on time of year
 - Comprehensive timezone handling (UTC to Central Time)
-- Configurable data fetching with initial historical load
+
+### Reporting
+- Posts updates to Bluesky with optional source link inclusion
+- Customizable posting intervals for different data types
+- Smart file management (auto-cleanup of old chart files)
 - Automatic retry mechanism for failed posts
-- Comprehensive logging and error handling
-- Configuration-driven behavior
 
 ## Prerequisites
 
 - Python 3.9+
-- GridStatus API key (create account at [gridstatus.io](https://www.gridstatus.io))
+- API Keys:
+  - GridStatus API key (create account at [gridstatus.io](https://www.gridstatus.io))
+  - EIA API key (obtain from [eia.gov](https://www.eia.gov/opendata/))
 - Bluesky account credentials
 
 ## Installation
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/comed-load-bot.git
-cd comed-load-bot
+git clone https://github.com/yourusername/comed-grid-bluesky-bot.git
+cd comed-grid-bluesky-bot
 ```
 
 2. Create and activate a virtual environment:
@@ -44,32 +62,14 @@ pip install -r requirements.txt
 ```bash
 # Create a .env file in the project root
 GRIDSTATUS_API_KEY=your_gridstatus_api_key
+EIA_API_KEY=your_eia_api_key
 BLUESKY_USERNAME=your_bluesky_username
 BLUESKY_PASSWORD=your_bluesky_password
 ```
 
-## Project Structure
-
-```
-.
-├── __init__.py
-├── config.yaml          # Application configuration
-├── main.py             # Application entry point
-├── readme.md
-├── requirements.txt
-└── src/
-    └── utils/
-        ├── config.py   # Configuration loader
-        └── logger.py   # Logging setup
-    ├── data_loader.py  # GridStatus API interface
-    ├── visualizer.py   # Chart generation
-    ├── analyzer.py     # Data analysis
-    └── bluesky_poster.py  # Bluesky integration
-```
-
 ## Configuration
 
-The application behavior can be customized through `config.yaml`:
+The application behavior is customized through `config.yaml`:
 
 ```yaml
 data_settings:
@@ -95,8 +95,61 @@ posting:
   interval_hours: 4    # How often to post updates
   include_images: true
   retry_attempts: 3    # Number of retry attempts for failed posts
-  include_source_link: true  # Include data source link in posts
+  include_source_link: true
+  processes:
+    load:
+      enabled: true    # Enable/disable load data posts
+    nuclear:
+      enabled: true    # Enable/disable nuclear data posts
+
+nuclear_data:
+  nrc:
+    url: "https://www.nrc.gov/reading-rm/doc-collections/event-status/reactor-status/powerreactorstatusforlast365days.txt"
+    plants:           # Nuclear units to track
+      - "Braidwood 1"
+      - "Braidwood 2"
+      - "Byron 1"
+      - "Byron 2"
+      - "Dresden 2"
+      - "Dresden 3"
+      - "LaSalle 1"
+      - "LaSalle 2"
+      - "Quad Cities 1"
+      - "Quad Cities 2"
+  eia:
+    plant_ids:        # EIA plant identifiers
+      - "6022"  # Braidwood
+      - "6023"  # Byron
+      - "869"   # Dresden
+      - "6026"  # LaSalle
+      - "880"   # Quad Cities
 ```
+
+## Data Sources
+
+### Grid Load Data
+- Source: PJM Interconnection via GridStatus API
+- Frequency: 5-minute intervals
+- Metrics: Real-time load in MW
+
+### Nuclear Generation Data
+1. NRC Power Reactor Status Reports
+   - Source: Nuclear Regulatory Commission
+   - Updates: Daily
+   - Metrics: Reactor power percentage
+
+2. EIA Plant Capacity Data
+   - Source: Energy Information Administration
+   - Updates: Monthly
+   - Metrics: Net Summer/Winter capacity
+
+## Database Schema
+
+The application maintains a SQLite database (`grid_data.db`) with the following tables:
+
+1. `grid_load` - Stores ComEd zone load data
+2. `nrc_status` - Stores daily reactor status reports
+3. `eia_capacity` - Stores monthly plant capacity data
 
 ## Usage
 
@@ -104,7 +157,7 @@ posting:
 
 To run the bot once:
 ```bash
-python main.py
+python run.py
 ```
 
 ### Scheduling Regular Updates
@@ -113,67 +166,57 @@ To run the bot every 4 hours, you can:
 
 1. Use cron (Linux/Mac):
 ```bash
-0 */4 * * * cd /path/to/comed-load-bot && ./venv/bin/python main.py
+0 */4 * * * cd /path/to/comed-grid-bluesky-bot && ./venv/bin/python run.py
 ```
 
 2. Use Task Scheduler (Windows):
 Create a task that runs every 4 hours executing:
 ```bash
-C:\path\to\comed-load-bot\venv\Scripts\python.exe C:\path\to\comed-load-bot\main.py
+C:\path\to\comed-grid-bluesky-bot\venv\Scripts\python.exe C:\path\to\comed-grid-bluesky-bot\run.py
 ```
 
 ## Output Examples
 
-The bot generates two types of output:
+The bot generates several types of output:
 
-1. Statistical Summary:
+1. Load Statistics:
 ```
 ComEd Load Report (2:00 PM - 6:00 PM CT)
-
 Average Load: 12,345 MW
 Maximum Load: 13,567 MW
 Minimum Load: 11,234 MW
 ```
 
-2. Visual Chart:
-- 24-hour load visualization with timestamp in filename
-- Shows load trends with configurable hour intervals
-- Central Time zone with proper timezone handling
+2. Nuclear Generation:
+```
+Nuclear Fleet Status
+Total Generation: 11,234 MW
+Units at Full Power: 8
+Units in Maintenance: 2
+Fleet Capacity Factor: 93.5%
+```
+
+3. Visual Charts:
+- 24-hour load visualization
+- Nuclear generation trends
 - Professional formatting with grid lines and clear labels
 - Customizable dimensions and DPI settings
-
-## Data Management
-
-- Automatic cleanup of old chart files (keeps 5 most recent)
-- Initial data load fetches 3 days of historical data
-- Regular updates fetch 24-hour windows
-- Proper timezone handling between UTC and Central Time
-- Configurable dataset and column selection
-
-## API Usage Notes
-
-- The free GridStatus API plan has a limit of 1 million rows per month
-- The application is designed to be efficient with API calls by:
-  - Only querying ComEd zone data
-  - Using appropriate row limits
-  - Minimizing API calls through smart data caching
-  - Configurable data fetch windows
 
 ## Error Handling
 
 - Comprehensive error logging with traceback
-- Automatic retry mechanism for failed posts (configurable attempts)
-- Graceful handling of API failures
-- File system error handling for chart generation
-- Timezone conversion error handling
+- Automatic retry mechanism for failed posts
+- Data validation and sanitization
+- API failure handling for multiple data sources
+- Database transaction management
 
 ## Logging
 
 Logs are written to both stdout and `logs/comed_bot.log`:
-- Rotates daily
-- Retains 7 days of history
-- Includes timestamps, log levels, and function names
-- Detailed error tracking with full tracebacks
+- Daily rotation with 7-day retention
+- Detailed error tracking with tracebacks
+- Separate logging for data fetching and posting processes
+- Performance metrics for API calls and database operations
 
 ## Development
 
@@ -182,12 +225,13 @@ Logs are written to both stdout and `logs/comed_bot.log`:
 1. Create new modules in `src/` for major features
 2. Update configuration in `config.yaml` if needed
 3. Add any new dependencies to `requirements.txt`
-4. Update main.py to integrate new features
+4. Update database schema if required
+5. Add appropriate tests
 
 ### Running Tests
 
 ```bash
-# TODO: Add testing instructions once tests are implemented
+python -m pytest src/tests/
 ```
 
 ## Contributing
@@ -204,14 +248,7 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 
 ## Acknowledgments
 
-- [GridStatus.io](https://www.gridstatus.io) for providing the API
-- PJM Interconnection for the underlying data
-
-## Support
-
-For support, please:
-1. Check the existing issues
-2. Create a new issue with:
-   - Detailed description of the problem
-   - Relevant logs
-   - Steps to reproduce
+- [GridStatus.io](https://www.gridstatus.io) for the PJM data API
+- [Nuclear Regulatory Commission](https://www.nrc.gov) for reactor status data
+- [Energy Information Administration](https://www.eia.gov) for capacity data
+- PJM Interconnection for the underlying grid data

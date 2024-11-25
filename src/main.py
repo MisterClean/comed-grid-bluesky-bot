@@ -5,8 +5,10 @@ from pathlib import Path
 from datetime import datetime
 from dotenv import load_dotenv
 from .data_loader import GridDataLoader, NuclearDataManager
-from .visualizer import LoadVisualizer, NuclearVisualizer
-from .analyzer import LoadAnalyzer, NuclearAnalyzer
+from .load_visualizer import LoadVisualizer
+from .nuclear_visualizer import NuclearVisualizer
+from .load_analyzer import LoadAnalyzer
+from .nuclear_analyzer import NuclearAnalyzer
 from .bluesky_poster import BlueSkyPoster
 from .utils.logger import setup_logger
 from .utils.config import load_config
@@ -54,9 +56,14 @@ class ComedLoadApp:
                     if load_df.empty:
                         raise ValueError("No data received from GridStatus API")
 
-                    load_chart_path = self.generate_chart_filename('comed_load')
-                    self.load_visualizer.create_24h_chart(load_df, output_path=str(load_chart_path))
+                    # Calculate load stats first since we need them for the chart
                     load_stats = self.load_analyzer.calculate_stats(load_df)
+                    
+                    # Create and save the load chart
+                    load_chart_path = self.generate_chart_filename('comed_load')
+                    self.load_visualizer.create_load_chart(load_df, output_path=str(load_chart_path))
+                    
+                    # Post the update with stats and chart
                     self.poster.post_load_update(load_stats, str(load_chart_path))
                     logger.info("Load data processing completed")
                 except Exception as e:
@@ -70,10 +77,10 @@ class ComedLoadApp:
                     self.nuclear_manager.update_data()
                     nuclear_stats = self.nuclear_analyzer.calculate_stats(load_df if 'load_df' in locals() else None)
                     
-                    nuclear_chart_path = self.generate_chart_filename('nuclear_vs_load')
-                    self.nuclear_visualizer.create_nuclear_vs_load_chart(
-                        nuclear_stats['load_data'],
+                    nuclear_chart_path = self.generate_chart_filename('nuclear')
+                    self.nuclear_visualizer.create_nuclear_chart(
                         nuclear_stats['nuclear_data'],
+                        nuclear_stats,
                         output_path=str(nuclear_chart_path)
                     )
                     

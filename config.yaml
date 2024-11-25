@@ -24,7 +24,7 @@ posting:
   include_source_link: true
   processes:
     load:
-      enabled: false
+      enabled: true
     nuclear:
       enabled: true
 

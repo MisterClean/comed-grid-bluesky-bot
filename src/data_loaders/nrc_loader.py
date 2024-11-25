@@ -58,8 +58,33 @@ class NRCDataLoader(NuclearDataLoader):
                 df = df[df['unit_name'].isin(self.config['plants'])]
             
             if not df.empty:
-                self.db.upsert_nrc_data(df)
-                logger.info(f"Stored NRC data with timestamp {df['report_date'].max()}")
+                # Get the latest data from the database for comparison
+                latest_date = df['report_date'].max()
+                existing_data = self.db.get_nrc_data_for_date(latest_date)
+                
+                if existing_data.empty:
+                    # No existing data for this date, safe to upsert
+                    self.db.upsert_nrc_data(df)
+                    logger.info(f"Stored new NRC data with timestamp {latest_date}")
+                else:
+                    # Compare with existing data
+                    df_compare = df.merge(
+                        existing_data,
+                        on=['report_date', 'unit_name'],
+                        how='left',
+                        suffixes=('_new', '_existing')
+                    )
+                    
+                    # Check if any values are different
+                    changes = df_compare[
+                        abs(df_compare['power_pct_new'] - df_compare['power_pct_existing']) > 0.01
+                    ]
+                    
+                    if not changes.empty:
+                        self.db.upsert_nrc_data(df)
+                        logger.info(f"Updated NRC data with {len(changes)} changes for timestamp {latest_date}")
+                    else:
+                        logger.info(f"No changes in NRC data for timestamp {latest_date}, skipping upsert")
             else:
                 logger.warning("No valid NRC data found to store")
             

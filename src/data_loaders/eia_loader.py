@@ -78,8 +78,34 @@ class EIADataLoader(NuclearDataLoader):
             df = df.drop_duplicates(subset=['plant_id', 'generator_id'], keep='first')
             
             if not df.empty:
-                self.db.upsert_eia_data(df)
-                logger.info(f"Successfully processed EIA data for period {df['period'].max()}")
+                latest_period = df['period'].max()
+                # Get existing data for the same period
+                existing_data = self.db.get_eia_data_for_period(latest_period)
+                
+                if existing_data.empty:
+                    # No existing data for this period, safe to upsert
+                    self.db.upsert_eia_data(df)
+                    logger.info(f"Stored new EIA data for period {latest_period}")
+                else:
+                    # Compare with existing data
+                    df_compare = df.merge(
+                        existing_data,
+                        on=['period', 'plant_id', 'generator_id'],
+                        how='left',
+                        suffixes=('_new', '_existing')
+                    )
+                    
+                    # Check if any values are different (using small threshold for float comparison)
+                    changes = df_compare[
+                        (abs(df_compare['net_summer_capacity_mw_new'] - df_compare['net_summer_capacity_mw_existing']) > 0.01) |
+                        (abs(df_compare['net_winter_capacity_mw_new'] - df_compare['net_winter_capacity_mw_existing']) > 0.01)
+                    ]
+                    
+                    if not changes.empty:
+                        self.db.upsert_eia_data(df)
+                        logger.info(f"Updated EIA data with {len(changes)} changes for period {latest_period}")
+                    else:
+                        logger.info(f"No changes in EIA data for period {latest_period}, skipping upsert")
             
             return df
             

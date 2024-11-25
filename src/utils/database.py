@@ -95,6 +95,34 @@ class DatabaseManager:
         finally:
             conn.close()
 
+    def get_nrc_data_for_date(self, report_date):
+        """Get NRC data for a specific report date"""
+        conn = self._get_connection()
+        try:
+            query = """
+                SELECT report_date, unit_name, power_pct
+                FROM nrc_reactor_status
+                WHERE report_date = ?
+            """
+            df = pd.read_sql_query(query, conn, params=(report_date.isoformat(),))
+            df['report_date'] = pd.to_datetime(df['report_date'])
+            return df
+        finally:
+            conn.close()
+
+    def get_eia_data_for_period(self, period):
+        """Get EIA data for a specific period"""
+        conn = self._get_connection()
+        try:
+            query = """
+                SELECT period, plant_id, generator_id, net_summer_capacity_mw, net_winter_capacity_mw
+                FROM eia_capacity
+                WHERE period = ?
+            """
+            return pd.read_sql_query(query, conn, params=(period,))
+        finally:
+            conn.close()
+
     def upsert_data(self, df):
         """Upsert data from a pandas DataFrame into the database"""
         if df.empty:
