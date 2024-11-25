@@ -51,7 +51,7 @@ class NuclearVisualizer:
             # Plot load data with coral line
             plt.plot(load_data['display_time'], 
                     load_data['load.comed'], 
-                    color='coral',
+                    color='#40E0D0',
                     linewidth=2,
                     label='Load')
             
@@ -79,7 +79,6 @@ class NuclearVisualizer:
                     f"Last 24 hours\n"
                     f"Nuclear Coverage: {stats['nuclear_percentage']:.1f}%\n"
                     f"Hours at Full Coverage: {stats['full_coverage_hours']:.1f}%\n"
-                    f"Average Generation: {stats['total_nuclear']/24000:.1f} GW"
                 )
                 
                 # Add text box
@@ -100,13 +99,13 @@ class NuclearVisualizer:
             plt.ylim(0, max_value + 2000)
             
             # Main title with left alignment
-            ax.text(0.0, 1.1, 'Nuclear Generation vs Load - Last 24 Hours (Central Time)', 
+            ax.text(0.0, 1.1, 'Nuclear Generation vs Load', 
                     transform=ax.transAxes,
                     fontsize=16,
                     fontweight='bold')
             
             # Subtitle with left alignment
-            ax.text(0.0, 1.05, '5 minute intervals (Megawatts). Nuclear data estimated using NRC & EIA reporting.',
+            ax.text(0.0, 1.05, '5 minute intervals, Nuclear data estimated using NRC & EIA reporting (not actuals).',
                     transform=ax.transAxes,
                     fontsize=12,
                     color='gray')

@@ -42,6 +42,16 @@ class ComedLoadApp:
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         return self.output_dir / f'{prefix}_{timestamp}.png'
 
+    def cleanup_file(self, file_path: str) -> None:
+        """Delete a specific file"""
+        try:
+            path = Path(file_path)
+            if path.exists():
+                path.unlink()
+                logger.info(f"Deleted file: {file_path}")
+        except Exception as e:
+            logger.error(f"Error deleting file {file_path}: {e}")
+
     def run(self):
         """Run the main application logic"""
         try:
@@ -64,7 +74,9 @@ class ComedLoadApp:
                     self.load_visualizer.create_load_chart(load_df, output_path=str(load_chart_path))
                     
                     # Post the update with stats and chart
-                    self.poster.post_load_update(load_stats, str(load_chart_path))
+                    if self.poster.post_load_update(load_stats, str(load_chart_path)):
+                        # Delete the image file after successful posting
+                        self.cleanup_file(str(load_chart_path))
                     logger.info("Load data processing completed")
                 except Exception as e:
                     logger.error(f"Error processing load data: {str(e)}")
@@ -84,7 +96,9 @@ class ComedLoadApp:
                         output_path=str(nuclear_chart_path)
                     )
                     
-                    self.poster.post_nuclear_update(nuclear_stats, str(nuclear_chart_path))
+                    if self.poster.post_nuclear_update(nuclear_stats, str(nuclear_chart_path)):
+                        # Delete the image file after successful posting
+                        self.cleanup_file(str(nuclear_chart_path))
                     logger.info("Nuclear data processing completed")
                 except Exception as e:
                     logger.error(f"Error processing nuclear data: {str(e)}")
@@ -108,12 +122,10 @@ def cleanup_old_files():
     try:
         output_dir = Path('output')
         if output_dir.exists():
-            # Keep only the 10 most recent files (5 each for load and nuclear)
-            files = sorted(output_dir.glob('*.png'), 
-                         key=lambda x: x.stat().st_mtime, 
-                         reverse=True)
-            for file in files[10:]:  # Keep 10 most recent files
+            # Delete all PNG files in the output directory
+            for file in output_dir.glob('*.png'):
                 file.unlink()
+            logger.info("Cleaned up all PNG files in output directory")
     except Exception as e:
         logger.error(f"Error cleaning up old files: {e}")
 
@@ -141,7 +153,7 @@ def main():
         app = ComedLoadApp()
         success = app.run()
         
-        # Clean up old files
+        # Clean up any remaining files
         cleanup_old_files()
         
         # Exit with appropriate status code

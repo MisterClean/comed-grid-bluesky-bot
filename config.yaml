@@ -1,8 +1,8 @@
 data_settings:
-  days_back: 1
-  initial_days_back: 3
-  limit: 10000
-  dataset: "pjm_standardized_5_min"
+  days_back: 1 # how far back the post should analyze
+  initial_days_back: 3 # when you load the app for the first time this is how far back it pulls data for
+  limit: 10000 # limit gridstatus data volume
+  dataset: "pjm_standardized_5_min" # gridstatus data set
   columns:
     - "interval_start_utc"
     - "interval_end_utc"
@@ -43,7 +43,7 @@ nuclear_data:
       - "Quad Cities 1"
       - "Quad Cities 2"
   eia:
-    plant_ids:
+    plant_ids: # found them here https://www.eia.gov/opendata/browser/electricity/operating-generator-capacity?frequency=monthly&data=net-summer-capacity-mw;net-winter-capacity-mw;&facets=plantid;&plantid=6022;6023;6026;869;&start=2023-01&end=2024-09&sortColumn=period;&sortDirection=desc;
       - "6022"  # Braidwood
       - "6023"  # Byron
       - "869"   # Dresden
