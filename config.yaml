@@ -27,6 +27,7 @@ posting:
       enabled: true
     nuclear:
       enabled: true
+      require_recent_nrc_data: true  # New setting to require NRC data be less than 24 hours old
 
 nuclear_data:
   nrc:

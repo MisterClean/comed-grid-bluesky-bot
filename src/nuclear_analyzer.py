@@ -15,9 +15,44 @@ class NuclearAnalyzer:
         self.target_tz = pytz.timezone(self.config['data_settings']['timezones']['target'])
         self.nuclear_manager = NuclearDataManager()
 
+    def check_nrc_data_age(self):
+        """Check if NRC data is recent enough based on config settings"""
+        if not self.config['posting']['processes']['nuclear'].get('require_recent_nrc_data', True):
+            return True
+
+        try:
+            # Update nuclear data
+            self.nuclear_manager.update_data()
+            nrc_data = self.nuclear_manager.nrc_loader.get_latest_available_data()
+            
+            if nrc_data.empty:
+                logger.warning("No NRC data available")
+                return False
+            
+            # Get the latest data timestamp
+            latest_nrc_time = nrc_data['report_date'].max()
+            current_time = pd.Timestamp.now(tz=pytz.UTC)
+            
+            # Check if data is older than 24 hours
+            age = current_time - latest_nrc_time
+            if age > timedelta(hours=24):
+                logger.warning(f"NRC data is too old ({age.total_seconds()/3600:.1f} hours)")
+                return False
+                
+            logger.info(f"NRC data age check passed ({age.total_seconds()/3600:.1f} hours)")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error checking NRC data age: {str(e)}")
+            return False
+
     def calculate_stats(self, load_df, hours=24):
         """Calculate nuclear generation statistics for the specified number of hours"""
         try:
+            # Check NRC data age first
+            if not self.check_nrc_data_age():
+                raise ValueError("NRC data is not recent enough for analysis")
+
             # Get the latest UTC time and convert to target timezone for display
             now_utc = load_df['interval_start_utc'].max()
             now_local = now_utc.tz_convert(self.target_tz)
