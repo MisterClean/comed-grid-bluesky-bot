@@ -1,0 +1,13 @@
+# Direct runtime dependencies; regenerate the hash-locked requirements.txt with uv.
+gridstatusio
+pandas
+pytz
+matplotlib
+seaborn
+PyYAML
+python-dotenv
+atproto>=0.0.73,<0.1
+loguru
+requests>=2.32.4
+cryptography>=50.0.2
+h11>=0.16.0
