@@ -6,7 +6,7 @@ matplotlib
 seaborn
 PyYAML
 python-dotenv
-atproto>=0.0.73,<0.1
+atproto>=0.0.75,<0.1
 loguru
 requests>=2.32.4
 cryptography>=50.0.2
